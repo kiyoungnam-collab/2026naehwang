@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>분수 탐험대 - 덧셈과 뺄셈</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f0fdf4;
+            --main-green: #4ade80;
+            --text-dark: #111827;
+            --fraction-blue: #60a5fa;
+            --fraction-orange: #fb923c;
+            --whole-color: #fde047;
+            --zone-pink: #fdf2f8;
+            --border-pink: #f472b6;
+            --zone-trash: #f3f4f6;
+            --border-trash: #9ca3af;
+        }
+
+        body {
+            font-family: 'Nanum Gothic', sans-serif;
+            background-color: var(--bg-color);
+            margin: 0; padding: 0;
+            display: flex; justify-content: center; align-items: center;
+            height: 100vh; overflow: hidden; touch-action: none;
+        }
+
+        #app-wrapper {
+            display: flex; justify-content: center; align-items: center;
+            width: 100%; height: 100%;
+        }
+
+        #app {
+            background: white;
+            display: flex; flex-direction: column;
+            box-sizing: border-box; position: relative;
+            transform-origin: center center;
+            transition: transform 0.2s ease;
+            border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            border: 4px solid var(--main-green); overflow: hidden;
+            width: 95vw; max-width: 1400px; height: 90vh; max-height: 900px;
+        }
+
+        @media (min-width: 768px) {
+            #app { flex-direction: row; }
+            .left-pane { flex: 1 1 auto; min-width: 0; border-right: 2px solid #e5e7eb; position: relative; }
+            .right-pane { flex: 0 0 max-content; min-width: 250px; border-top: none !important; height: 100%; }
+        }
+
+        .left-pane { display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; padding-bottom: 20px;}
+        .right-pane {
+            padding: 30px 20px; background: #f9fafb; border-top: 2px solid #e5e7eb;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+        }
+
+        header {
+            background: var(--main-green); color: white;
+            text-align: center; padding: 15px; font-size: 1.5rem; font-weight: bold; flex-shrink: 0;
+            position: relative;
+        }
+        #scale-controls {
+            position: absolute; right: 15px; top: 15px;
+            display: flex; gap: 5px; font-size: 0.9rem;
+        }
+        .scale-btn {
+            background: rgba(255,255,255,0.2); border: 2px solid white; color: white;
+            border-radius: 6px; padding: 4px 8px; cursor: pointer; font-weight: bold;
+        }
+        .scale-btn:hover, .scale-btn.active-scale { background: white; color: var(--main-green); }
+
+        .stage-indicator {
+            display: flex; justify-content: space-around; padding: 10px;
+            background: #e5e7eb; font-size: 1.1rem; font-weight: bold; color: #9ca3af; flex-shrink: 0;
+        }
+        .stage-indicator .active { color: var(--main-green); }
+
+        #question-area {
+            text-align: center; padding: 20px; 
+            display: flex; justify-content: center; align-items: center; gap: 10px; flex-shrink: 0; flex-wrap: wrap;
+        }
+        .math-fraction { display: inline-flex; align-items: center; font-size: 3.5rem; font-weight: bold; color: var(--text-dark); }
+        .math-fraction .whole { margin-right: 8px; }
+        .math-fraction .frac { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; }
+        .math-fraction .num { border-bottom: 5px solid var(--text-dark); padding: 0 8px; line-height: 1.1; }
+        .math-fraction .den { padding: 0 8px; line-height: 1.1; }
+        .math-operator { font-size: 3.5rem; font-weight: bold; padding: 0 10px; }
+
+        #visual-workspace {
+            flex-grow: 1; display: flex; flex-direction: column;
+            align-items: center; padding: 10px 20px 20px 20px; gap: 15px;
+        }
+
+        .instruction { font-size: 1.3rem; color: #ef4444; font-weight: bold; text-align: center; }
+
+        .fraction-bar-container, .drop-zone {
+            display: flex; width: 100%; max-width: 900px; min-height: 80px; 
+            border-radius: 12px; position: relative;
+            align-items: flex-start; justify-content: flex-start;
+            padding: 10px; gap: 0; flex-wrap: wrap; 
+        }
+        
+        .zone-pink { background: var(--zone-pink); border: 4px dashed var(--border-pink); }
+        .zone-trash { background: var(--zone-trash); border: 4px dashed var(--border-trash); }
+        .zone-source { border: 3px solid #ccc; background: transparent;}
+
+        .drop-zone-placeholder {
+            position: absolute; width: 100%; height: 100%; top:0; left:0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.3rem; font-weight: bold; pointer-events: none; text-align: center;
+        }
+
+        .whole-block { 
+            background-color: var(--whole-color); color: #854d0e; cursor: grab; 
+            border: 3px solid #eab308; box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+            height: 60px; width: 240px; 
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; border-radius: 8px; font-size: 1.3rem; touch-action: none; flex-shrink: 0;
+            margin-right: 15px; margin-bottom: 10px; 
+            box-sizing: border-box;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+        }
+        .whole-block:active { cursor: grabbing; transform: scale(1.05); }
+        
+        .whole-breakable { cursor: grab !important; border-style: dashed; }
+        .whole-breakable:active { transform: scale(0.95); cursor: grabbing !important; }
+
+        .fraction-piece {
+            height: 60px; 
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.3rem; font-weight: bold; color: white; cursor: grab;
+            touch-action: none; flex-shrink: 0;
+            box-sizing: border-box;
+            border: 2px solid rgba(255,255,255,0.6); 
+            border-right: 2px dashed white; 
+            margin-bottom: 10px;
+            transition: transform 0.5s ease-in-out, opacity 0.5s ease;
+        }
+        .fraction-piece:active { cursor: grabbing; transform: scale(1.05); }
+        
+        .piece-blue { background-color: var(--fraction-blue); }
+        .piece-orange { background-color: var(--fraction-orange); }
+
+        .answer-inputs { display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 20px;}
+        .answer-inputs input {
+            font-size: 2.5rem; font-weight: bold; text-align: center;
+            border-radius: 12px; border: 3px solid #ccc; outline: none; background: white;
+        }
+        .answer-inputs input:focus { border-color: var(--main-green); }
+        #ans-whole { width: 80px; height: 80px; }
+        #ans-num { width: 80px; height: 70px; border-bottom: none; border-radius: 12px 12px 0 0; }
+        #ans-den { font-size: 2.5rem; font-weight: bold; }
+        
+        .btn-submit { padding: 18px 40px; font-size: 1.5rem; font-weight: bold; background: var(--main-green); color: white; border: none; border-radius: 20px; cursor: pointer; box-shadow: 0 4px 0 #16a34a; transition: all 0.1s; }
+        .btn-submit:active { transform: translateY(4px); box-shadow: none; }
+        
+        #feedback-panel {
+            display: none; padding: 20px; border-radius: 12px; text-align: center; width: 100%; max-width: 300px; font-size: 1.2rem; line-height: 1.5; margin-bottom: 15px; word-break: keep-all;
+        }
+        .feedback-correct { background: #dcfce7; border: 2px solid #22c55e; color: #166534; }
+        .feedback-wrong { background: #fee2e2; border: 2px solid #ef4444; color: #991b1b; }
+
+    </style>
+</head>
+<body>
+
+<div id="app-wrapper">
+    <div id="app">
+        <div class="left-pane">
+            <header>
+                ✨ 4학년 분수 탐험대
+                <div id="scale-controls">
+                    <button class="scale-btn" onclick="setScale(0.8, this)">80%</button>
+                    <button class="scale-btn" onclick="setScale(0.9, this)">90%</button>
+                    <button class="scale-btn active-scale" onclick="setScale(1, this)">100%</button>
+                    <button class="scale-btn" onclick="setScale(1.1, this)">110%</button>
+                    <button class="scale-btn" onclick="setScale(1.2, this)">120%</button>
+                </div>
+            </header>
+            <div class="stage-indicator">
+                <span id="stg-0" class="active">1. 진분수 덧셈</span>
+                <span id="stg-1">2. 대분수 덧셈</span>
+                <span id="stg-2">3. 진분수 뺄셈</span>
+                <span id="stg-3">4. 대분수 뺄셈</span>
+            </div>
+
+            <div id="question-area"></div>
+            <div id="visual-workspace"></div>
+        </div>
+
+        <div class="right-pane">
+            <div class="answer-inputs" id="input-area">
+                <input type="text" inputmode="numeric" pattern="[0-9]*" id="ans-whole" placeholder="자연수" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                <div class="math-fraction">
+                    <div class="frac">
+                        <input type="text" inputmode="numeric" pattern="[0-9]*" id="ans-num" placeholder="분자" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                        <div style="width: 100%; height: 6px; background: var(--text-dark);"></div>
+                        <span id="ans-den" class="den" style="height: 70px; display: flex; align-items: center;">5</span>
+                    </div>
+                </div>
+            </div>
+            
+            <button class="btn-submit" id="btn-check" onclick="checkAnswer()">정답 확인</button>
+            <div id="feedback-panel"></div>
+            <button id="btn-next" class="btn-submit" style="display: none; background: #3b82f6; box-shadow: 0 4px 0 #2563eb;" onclick="nextQuestion()">다음 문제 ➔</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    window.currentScale = 1;
+    function setScale(scale, btnElement) {
+        window.currentScale = scale;
+        const app = document.getElementById('app');
+        app.style.transform = `scale(${scale})`;
+
+        document.querySelectorAll('.scale-btn').forEach(btn => btn.classList.remove('active-scale'));
+        btnElement.classList.add('active-scale');
+    }
+
+    const DB = [[], [], [], []];
+    
+    // Stage 0
+    for(let i=0; i<50; i++) {
+        let den = Math.floor(Math.random() * 6) + 3; 
+        let n1 = Math.floor(Math.random() * (den-1)) + 1;
+        let n2 = Math.floor(Math.random() * (den-1)) + 1;
+        if(n1+n2 >= den) n2 = den - n1 - 1; 
+        if(n2 <= 0) n2 = 1;
+        DB[0].push({ type: 'add', den, w1:0, n1, w2:0, n2, aw:0, an: n1+n2 });
+    }
+
+    // Stage 1
+    for(let i=0; i<50; i++) {
+        let den = Math.floor(Math.random() * 5) + 4;
+        let w1 = Math.floor(Math.random() * 3) + 1;
+        let w2 = Math.floor(Math.random() * 3) + 1;
+        
+        let min_n1 = Math.floor(den / 2);
+        let n1 = Math.floor(Math.random() * (den - min_n1)) + min_n1;
+        let n2 = Math.floor(Math.random() * (den - 1)) + 1;
+        
+        if (n1 + n2 < den) {
+            n2 = den - n1 + Math.floor(Math.random() * (den - (den - n1))); 
+        }
+
+        let aw = w1 + w2; let an = n1 + n2;
+        if(an >= den) { aw += 1; an -= den; }
+        DB[1].push({ type: 'add', den, w1, n1, w2, n2, aw, an });
+    }
+
+    // Stage 2
+    for(let i=0; i<50; i++) {
+        let den = Math.floor(Math.random() * 6) + 3;
+        let n1 = Math.floor(Math.random() * (den-1)) + 2;
+        let n2 = Math.floor(Math.random() * (n1-1)) + 1;
+        DB[2].push({ type: 'sub', den, w1:0, n1, w2:0, n2, aw:0, an: n1-n2 });
+    }
+
+    // Stage 3
+    for(let i=0; i<50; i++) {
+        let den = Math.floor(Math.random() * 5) + 4;
+        let w1 = Math.floor(Math.random() * 3) + 2;
+        let w2 = Math.floor(Math.random() * (w1-1)) + 1;
+        
+        let n2 = Math.floor(Math.random() * (den-2)) + 2; 
+        let n1 = Math.floor(Math.random() * (n2-1)) + 1; 
+
+        let aw = (w1 - 1) - w2;
+        let an = (n1 + den) - n2;
+        DB[3].push({ type: 'sub', den, w1, n1, w2, n2, aw, an });
+    }
+
+    let currentStage = 0;
+    let currentQ = null;
+    let isCorrectState = false;
+
+    function loadQuestion() {
+        for(let i=0; i<4; i++) {
+            document.getElementById(`stg-${i}`).className = (i === currentStage) ? 'active' : '';
+        }
+        const pool = DB[currentStage];
+        currentQ = pool[Math.floor(Math.random() * pool.length)];
+        
+        const qArea = document.getElementById('question-area');
+        qArea.innerHTML = formatFraction(currentQ.w1, currentQ.n1, currentQ.den) + 
+                          `<span class="math-operator">${currentQ.type === 'add' ? '+' : '-'}</span>` + 
+                          formatFraction(currentQ.w2, currentQ.n2, currentQ.den) + 
+                          `<span class="math-operator">=</span><span class="math-operator">?</span>`;
+                          
+        document.getElementById('ans-den').innerText = currentQ.den;
+        document.getElementById('ans-whole').value = '';
+        document.getElementById('ans-num').value = '';
+        document.getElementById('feedback-panel').style.display = 'none';
+        document.getElementById('btn-next').style.display = 'none';
+        document.getElementById('btn-check').style.display = 'block';
+        
+        document.getElementById('ans-whole').style.display = 'inline-block';
+        
+        renderVisuals();
+    }
+
+    function formatFraction(w, n, d) {
+        let html = '<div class="math-fraction">';
+        if(w > 0) html += `<span class="whole">${w}</span>`;
+        if(n > 0) html += `<div class="frac"><span class="num">${n}</span><span class="den">${d}</span></div>`;
+        html += '</div>';
+        return html;
+    }
+
+    function renderVisuals() {
+        const ws = document.getElementById('visual-workspace');
+        let html = '';
+        
+        if(currentQ.type === 'add') {
+            html += `<div class="instruction">💡 제시된 자연수와 조각을 모두 <b>분홍색 정답 상자</b>에 모아보세요!</div>`;
+            html += `<div id="source-1" class="fraction-bar-container zone-source"></div>`;
+            html += `<div id="source-2" class="fraction-bar-container zone-source"></div>`;
+            html += `<div id="main-drop-zone" class="drop-zone zone-pink"><div class="drop-zone-placeholder" style="color: var(--border-pink);">분홍색 정답 상자<br><span style="font-size:1rem; font-weight:normal;">모든 자연수와 조각을 자유롭게 배치해보세요</span></div></div>`;
+            ws.innerHTML = html;
+
+            const s1 = document.getElementById('source-1');
+            for(let i=0; i<currentQ.w1; i++) createWholeBlock(s1);
+            for(let i=0; i<currentQ.n1; i++) createPiece(s1, 'piece-blue');
+            
+            const s2 = document.getElementById('source-2');
+            for(let i=0; i<currentQ.w2; i++) createWholeBlock(s2);
+            for(let i=0; i<currentQ.n2; i++) createPiece(s2, 'piece-orange');
+
+        } else {
+            html += `<div class="instruction">💡 뺄 만큼 <b>회색 상자</b>에 버린 뒤, <b>남은 것을 분홍색 상자</b>로 옮기세요! (필요하면 자연수를 클릭해 쪼갤 수 있습니다.)</div>`;
+            html += `<div id="source-1" class="fraction-bar-container zone-source"></div>`; 
+            
+            let takeAwayText = currentQ.w2 > 0 ? `자연수 ${currentQ.w2}개와 조각 ${currentQ.n2}개를 버리세요` : `조각 ${currentQ.n2}개를 버리세요`;
+            html += `<div id="trash-zone" class="drop-zone zone-trash"><div class="drop-zone-placeholder" style="color: var(--border-trash);">회색 덜어내는 상자<br><span style="font-size:1rem; font-weight:normal;">여기로 ${takeAwayText}</span></div></div>`;
+
+            html += `<div id="main-drop-zone" class="drop-zone zone-pink"><div class="drop-zone-placeholder" style="color: var(--border-pink);">분홍색 정답 상자<br><span style="font-size:1rem; font-weight:normal;">남은 자연수와 조각을 자유롭게 배치해보세요</span></div></div>`;
+            ws.innerHTML = html;
+
+            const s1 = document.getElementById('source-1');
+            for(let i=0; i<currentQ.w1; i++) {
+                let block = document.createElement('div');
+                block.className = 'whole-block whole-breakable';
+                block.innerHTML = '자연수 1<br><span style="font-size:0.8rem;">(클릭해 쪼개기)</span>';
+                block.dataset.origWidth = '240px'; 
+                makeDraggable(block);
+                s1.appendChild(block);
+            }
+            for(let i=0; i<currentQ.n1; i++) createPiece(s1, 'piece-blue');
+        }
+    }
+
+    function createWholeBlock(container) {
+        const block = document.createElement('div');
+        block.className = 'whole-block';
+        block.innerHTML = '자연수 1';
+        block.dataset.origWidth = '240px'; 
+        makeDraggable(block);
+        container.appendChild(block);
+        return block;
+    }
+
+    function createPiece(container, colorClass) {
+        const piece = document.createElement('div');
+        piece.className = `fraction-piece ${colorClass}`;
+        let exactWidth = `calc(240px / ${currentQ.den})`;
+        piece.style.width = exactWidth; 
+        piece.dataset.origWidth = exactWidth;
+        piece.innerHTML = `1/${currentQ.den}`;
+        makeDraggable(piece);
+        container.appendChild(piece);
+        return piece;
+    }
+
+    window.breakWhole = function(el) {
+        el.style.transform = "scale(0)";
+        const parent = el.parentElement;
+        const nextSibling = el.nextSibling; // 원래 있던 위치 기억
+        setTimeout(() => {
+            el.remove();
+            for(let i=0; i<currentQ.den; i++) {
+                setTimeout(() => {
+                    const piece = createPiece(parent, 'piece-blue');
+                    // 맨 끝으로 가지 않고 쪼개진 제자리에 삽입
+                    if (nextSibling) {
+                        parent.insertBefore(piece, nextSibling);
+                    }
+                }, i * 50);
+            }
+        }, 150);
+    };
+
+    function checkAndMergeFractions(dropZone) {
+        if (!dropZone) return;
+
+        const pieces = Array.from(dropZone.querySelectorAll('.fraction-piece'));
+        
+        if (pieces.length >= currentQ.den) {
+            const piecesToMerge = pieces.slice(0, currentQ.den);
+            const targetRef = piecesToMerge[0];
+            
+            piecesToMerge.forEach(p => {
+                p.style.transform = 'scale(0.9) rotate(2deg)';
+            });
+
+            setTimeout(() => {
+                piecesToMerge.forEach(p => {
+                    p.style.transform = 'scale(0)';
+                    p.style.opacity = '0';
+                });
+
+                setTimeout(() => {
+                    const newWhole = createWholeBlock(dropZone); 
+                    newWhole.style.transform = 'scale(0)'; 
+                    
+                    dropZone.insertBefore(newWhole, targetRef);
+                    piecesToMerge.forEach(p => p.remove());
+                    
+                    setTimeout(() => {
+                        newWhole.style.transform = 'scale(1.1)';
+                        confetti({ particleCount: 30, spread: 30, origin: { y: 0.8 }, colors: ['#fde047'] }); 
+                        setTimeout(() => { newWhole.style.transform = 'scale(1)'; }, 250);
+                    }, 50);
+
+                    checkAndMergeFractions(dropZone);
+                }, 800); 
+            }, 400); 
+        }
+    }
+
+    // 마그네틱 스냅: 주변 블록의 중앙값을 기준으로 놓을 위치 계산
+    function getInsertPosition(zone, x, y) {
+        const elements = [...zone.querySelectorAll('.whole-block:not(.dragging), .fraction-piece:not(.dragging)')];
+        let closest = null;
+        let minDistance = Infinity;
+
+        for (let child of elements) {
+            const box = child.getBoundingClientRect();
+            const childCenterX = box.left + box.width / 2;
+            const childCenterY = box.top + box.height / 2;
+            
+            const distance = Math.hypot(x - childCenterX, y - childCenterY);
+            if (distance < minDistance) {
+                minDistance = distance;
+                closest = child;
+            }
+        }
+
+        if (closest) {
+            const box = closest.getBoundingClientRect();
+            if (x > box.left + box.width / 2) {
+                return closest.nextSibling;
+            } else {
+                return closest; 
+            }
+        }
+        return null;
+    }
+
+    function makeDraggable(el) {
+        let isDragging = false;
+        let cloneEl = null;
+        let startX, startY;
+        let mouseStartX, mouseStartY;
+        let hasMoved = false; // 클릭과 드래그를 구분하기 위한 플래그
+        let returnZoneId = '';
+
+        const start = (e) => {
+            e.preventDefault();
+            isDragging = true;
+            hasMoved = false; 
+            returnZoneId = el.parentElement.id; 
+            
+            const t = e.touches ? e.touches[0] : e;
+            mouseStartX = t.clientX;
+            mouseStartY = t.clientY;
+
+            const rect = el.getBoundingClientRect();
+            const scale = window.currentScale || 1;
+
+            el.style.opacity = '0'; 
+            el.classList.add('dragging'); 
+
+            cloneEl = el.cloneNode(true);
+            cloneEl.style.position = 'fixed'; 
+            cloneEl.style.left = rect.left + 'px';
+            cloneEl.style.top = rect.top + 'px';
+            cloneEl.style.width = rect.width + 'px';
+            cloneEl.style.height = rect.height + 'px';
+            cloneEl.style.margin = '0';
+            cloneEl.style.opacity = '0.9';
+            cloneEl.style.zIndex = '9999';
+            cloneEl.style.pointerEvents = 'none'; 
+            cloneEl.style.boxShadow = '0 10px 25px rgba(0,0,0,0.3)';
+            cloneEl.style.transform = 'scale(1.05)';
+
+            document.body.appendChild(cloneEl);
+
+            startX = t.clientX / scale - rect.left / scale;
+            startY = t.clientY / scale - rect.top / scale;
+            
+            document.querySelectorAll('.drop-zone-placeholder').forEach(p => p.style.display = 'none');
+        };
+
+        const move = (e) => {
+            if (!isDragging || !cloneEl) return;
+            e.preventDefault();
+            const t = e.touches ? e.touches[0] : e;
+            
+            // 움직임(드래그) 감지 기준: 5px 이상 마우스가 이동했을 때
+            if (!hasMoved) {
+                const dx = t.clientX - mouseStartX;
+                const dy = t.clientY - mouseStartY;
+                if (dx * dx + dy * dy > 25) { 
+                    hasMoved = true;
+                }
+            }
+
+            const scale = window.currentScale || 1;
+            cloneEl.style.left = (t.clientX / scale - startX) * scale + 'px';
+            cloneEl.style.top = (t.clientY / scale - startY) * scale + 'px';
+        };
+
+        const end = (e) => {
+            if (!isDragging || !cloneEl) return;
+            isDragging = false;
+            
+            const dropZone = document.getElementById('main-drop-zone');
+            const trashZone = document.getElementById('trash-zone');
+            const source1 = document.getElementById('source-1');
+            const source2 = document.getElementById('source-2');
+            
+            const rect = cloneEl.getBoundingClientRect();
+            const center = { x: rect.left + rect.width/2, y: rect.top + rect.height/2 };
+
+            cloneEl.remove();
+            cloneEl = null;
+
+            el.style.opacity = '1'; 
+            el.classList.remove('dragging');
+            
+            // 💡 움직임이 거의 없었고(클릭), 쪼갤 수 있는 블록이라면 드래그 취소 후 쪼개기 함수 실행
+            if (!hasMoved && el.classList.contains('whole-breakable')) {
+                breakWhole(el);
+                return;
+            }
+
+            el.style.position = "static";
+            el.style.left = '';
+            el.style.top = '';
+            
+            if(el.classList.contains('whole-block')) {
+                el.style.marginRight = '15px';
+            } else {
+                el.style.marginRight = '0px';
+            }
+
+            if (dropZone && isInZone(center, dropZone)) {
+                const insertPos = getInsertPosition(dropZone, center.x, center.y);
+                dropZone.insertBefore(el, insertPos);
+                checkAndMergeFractions(dropZone);
+            } else if (trashZone && isInZone(center, trashZone)) {
+                const insertPos = getInsertPosition(trashZone, center.x, center.y);
+                trashZone.insertBefore(el, insertPos);
+            } else if (source1 && isInZone(center, source1)) {
+                const insertPos = getInsertPosition(source1, center.x, center.y);
+                source1.insertBefore(el, insertPos);
+            } else if (source2 && isInZone(center, source2)) {
+                const insertPos = getInsertPosition(source2, center.x, center.y);
+                source2.insertBefore(el, insertPos);
+            } else {
+                const returnParent = document.getElementById(returnZoneId);
+                if(returnParent) {
+                    returnParent.appendChild(el);
+                }
+            }
+            
+            if(dropZone && dropZone.children.length === 1) dropZone.querySelector('.drop-zone-placeholder').style.display = 'flex';
+            if(trashZone && trashZone.children.length === 1) trashZone.querySelector('.drop-zone-placeholder').style.display = 'flex';
+        };
+
+        el.addEventListener('touchstart', start, {passive:false});
+        el.addEventListener('mousedown', start);
+        window.addEventListener('touchmove', move, {passive:false});
+        window.addEventListener('mousemove', move);
+        window.addEventListener('touchend', end);
+        window.addEventListener('mouseup', end);
+    }
+
+    function isInZone(center, zone) {
+        if(!zone) return false;
+        const box = zone.getBoundingClientRect();
+        return (center.x > box.left && center.x < box.right && center.y > box.top && center.y < box.bottom);
+    }
+
+    function checkAnswer() {
+        let w = parseInt(document.getElementById('ans-whole').value) || 0;
+        let n = parseInt(document.getElementById('ans-num').value) || 0;
+        let d = currentQ.den;
+
+        let expectedTotal = currentQ.aw * d + currentQ.an;
+        let userTotal = w * d + n;
+
+        let isCorrect = (expectedTotal === userTotal);
+        
+        const panel = document.getElementById('feedback-panel');
+        
+        let explanation = currentQ.type === 'add' ? 
+            (currentStage === 0 ? `분모가 같을 때는 분자끼리 더합니다.<br>(${currentQ.n1} + ${currentQ.n2}) / ${d} = ${currentQ.an}/${d}` : `자연수는 자연수끼리, 분수는 분수끼리 더합니다.<br>분자가 분모보다 커지면 <strong>받아올림</strong>을 합니다!`) :
+            (currentStage === 2 ? `분모가 같을 때는 분자끼리 뺍니다.<br>(${currentQ.n1} - ${currentQ.n2}) / ${d} = ${currentQ.an}/${d}` : `분수끼리 뺄 수 없으므로, 자연수 1을 분모가 ${d}인 분수로 <strong>받아내림</strong> 하여 계산합니다.`);
+
+        if(isCorrect) {
+            confetti({ particleCount: 150, spread: 80 });
+            panel.className = 'feedback-correct';
+            panel.innerHTML = `<strong>🎉 정답입니다!</strong><br><br>${explanation}`;
+            isCorrectState = true;
+            document.getElementById('btn-next').innerText = "다음 단계로 ➔";
+        } else {
+            panel.className = 'feedback-wrong';
+            panel.innerHTML = `<strong>❌ 다시 생각해보세요.</strong><br><br>${explanation}<br><br>💡 <em>같은 단계의 다른 문제로 다시 연습해 봅시다.</em>`;
+            isCorrectState = false;
+            document.getElementById('btn-next').innerText = "다시 풀기 ➔";
+        }
+
+        panel.style.display = 'block';
+        document.getElementById('btn-check').style.display = 'none';
+        document.getElementById('btn-next').style.display = 'block';
+    }
+
+    function nextQuestion() {
+        if(isCorrectState) {
+            if(currentStage < 3) currentStage++;
+            else { alert("🎊 모든 단계를 완료했습니다! 처음부터 다시 시작합니다."); currentStage = 0; }
+        }
+        loadQuestion();
+    }
+
+    loadQuestion();
+</script>
+</body>
+</html>
